@@ -1,0 +1,82 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - vhagar_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  finbert:
+    build:
+      context: ./services/finbert-service
+    restart: unless-stopped
+    environment:
+      FINBERT_MODEL_ID: ProsusAI/finbert
+      FINBERT_MAX_TEXT_LENGTH: 6000
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - vhagar_models:/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8001/health',timeout=5)); assert d.get('ready') is True"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10m
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      finbert:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      FRONTEND_ORIGIN: http://localhost:4173
+      MONGODB_URI: mongodb://mongodb:27017/vhagar
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in the root .env file}
+      COOKIE_SECURE: "false"
+      FINBERT_SERVICE_URL: http://finbert:8001
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-disabled}
+      MARKET_DATA_API_KEY: ${MARKET_DATA_API_KEY:-}
+      NEWS_PROVIDER: ${NEWS_PROVIDER:-disabled}
+      LLM_PROVIDER: ${LLM_PROVIDER:-disabled}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:4173:4173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  vhagar_mongo:
+  vhagar_models:

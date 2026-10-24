@@ -1,0 +1,24 @@
+{
+  "name": "vhagar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VHAGAR financial intelligence platform monorepo",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "build": "npm run build --workspace frontend && npm run build --workspace backend",
+    "typecheck": "npm run typecheck --workspace frontend && npm run typecheck --workspace backend",
+    "test": "npm run test --workspace backend",
+    "dev:finbert": "python -m uvicorn app.main:app --app-dir services/finbert-service --host 127.0.0.1 --port 8001",
+    "test:finbert": "python -m pytest -q services/finbert-service/tests",
+    "check:python": "python -m compileall -q services/finbert-service/app",
+    "verify:finbert": "python scripts/verify-finbert.py"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
